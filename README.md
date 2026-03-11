@@ -10,16 +10,16 @@
 
 ### Run
 ```python
-python speculative_decode.py --prompt "Introduce Singapore" --num-draft-tokens 1 --max-tokens 512 --temp 0 --top-p 1 --compare-baseline```
+python speculative_decode.py --prompt "Introduce Singapore" --num-draft-tokens 1 --max-tokens 512 --temp 0 --top-p 1 --compare-baseline
+```
 
 ### Results
-```
-=== Comparison Summary ===
-baseline_wall_time:  5.73 sec
-spec_wall_time:      5.35 sec
-wall_time_speedup:   1.07x
-baseline_gen_tps:    92.65
-spec_gen_tps:        98.33
-generation_tps_gain: 1.06x
-spec_acceptance:     40.82%
-```
+
+- baseline_wall_time:  5.73 sec
+- spec_wall_time:      5.35 sec
+- wall_time_speedup:   1.07x
+- baseline_gen_tps:    92.65
+- spec_gen_tps:        98.33
+- generation_tps_gain: 1.06x
+- spec_acceptance:     40.82%
+
