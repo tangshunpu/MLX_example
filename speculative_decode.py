@@ -7,7 +7,7 @@ from mlx_lm import load, stream_generate
 from mlx_lm.sample_utils import make_sampler
 
 
-DEFAULT_DRAFT_MODEL = "mlx-community/Qwen3-0.6B-4bit"
+DEFAULT_DRAFT_MODEL = "mlx-community/Qwen3-1.7B-4bit"
 DEFAULT_TARGET_MODEL = "mlx-community/Qwen3-8B-4bit"
 
 
@@ -57,6 +57,11 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.9,
         help="Top-p sampling threshold.",
+    )
+    parser.add_argument(
+        "--compare-baseline",
+        action="store_true",
+        help="Compare target-only decoding against speculative decoding.",
     )
     return parser.parse_args()
 
@@ -124,14 +129,19 @@ def generate_once(
     peak_memory = 0.0
     started_at = time.perf_counter()
 
+    stream_kwargs = {
+        "max_tokens": max_tokens,
+        "sampler": sampler,
+    }
+    if draft_model is not None:
+        stream_kwargs["draft_model"] = draft_model
+        stream_kwargs["num_draft_tokens"] = num_draft_tokens
+
     for response in stream_generate(
         target_model,
         tokenizer,
         formatted_prompt,
-        max_tokens=max_tokens,
-        draft_model=draft_model,
-        num_draft_tokens=num_draft_tokens,
-        sampler=sampler,
+        **stream_kwargs,
     ):
         if response.text:
             print(response.text, end="", flush=True)
@@ -175,6 +185,27 @@ def print_stats(
     print(f"wall_time_sec:       {elapsed:.2f}")
 
 
+def print_compare_summary(
+    baseline_stats: Tuple[str, int, int, float, float, float, float],
+    speculative_stats: Tuple[str, int, int, float, float, float, float],
+) -> None:
+    _, _, _, _, baseline_gen_tps, _, baseline_elapsed = baseline_stats
+    _, accepted, generated, _, spec_gen_tps, _, spec_elapsed = speculative_stats
+
+    speedup = baseline_elapsed / spec_elapsed if spec_elapsed > 0 else 0.0
+    tps_gain = spec_gen_tps / baseline_gen_tps if baseline_gen_tps > 0 else 0.0
+    acceptance_rate = accepted / generated if generated > 0 else 0.0
+
+    print("\n=== Comparison Summary ===")
+    print(f"baseline_wall_time:  {baseline_elapsed:.2f} sec")
+    print(f"spec_wall_time:      {spec_elapsed:.2f} sec")
+    print(f"wall_time_speedup:   {speedup:.2f}x")
+    print(f"baseline_gen_tps:    {baseline_gen_tps:.2f}")
+    print(f"spec_gen_tps:        {spec_gen_tps:.2f}")
+    print(f"generation_tps_gain: {tps_gain:.2f}x")
+    print(f"spec_acceptance:     {acceptance_rate:.2%}")
+
+
 def main() -> None:
     args = parse_args()
     ensure_model_ref(args.target_model, "Target")
@@ -186,6 +217,39 @@ def main() -> None:
     )
 
     if args.prompt:
+        if args.compare_baseline:
+            print("=== Baseline: target-only ===")
+            print("Assistant: ", end="", flush=True)
+            baseline_stats = generate_once(
+                target_model,
+                None,
+                tokenizer,
+                args.prompt,
+                system_prompt=args.system,
+                max_tokens=args.max_tokens,
+                num_draft_tokens=args.num_draft_tokens,
+                temp=args.temp,
+                top_p=args.top_p,
+            )
+            print_stats(*baseline_stats[1:])
+
+            print("\n=== Speculative decoding ===")
+            print("Assistant: ", end="", flush=True)
+            speculative_stats = generate_once(
+                target_model,
+                draft_model,
+                tokenizer,
+                args.prompt,
+                system_prompt=args.system,
+                max_tokens=args.max_tokens,
+                num_draft_tokens=args.num_draft_tokens,
+                temp=args.temp,
+                top_p=args.top_p,
+            )
+            print_stats(*speculative_stats[1:])
+            print_compare_summary(baseline_stats, speculative_stats)
+            return
+
         print("Assistant: ", end="", flush=True)
         _, accepted, generated, prompt_tps, generation_tps, peak_memory, elapsed = (
             generate_once(
