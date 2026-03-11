@@ -10,8 +10,7 @@
 
 ### Run
 ```python
-python speculative_decode.py --prompt "Introduce Singapore" --num-draft-tokens 1 --max-tokens 512 --temp 0 --top-p 1
-```
+python speculative_decode.py --prompt "Introduce Singapore" --num-draft-tokens 1 --max-tokens 512 --temp 0 --top-p 1 --compare-baseline```
 
 ### Results
 ```
